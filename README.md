@@ -1,22 +1,22 @@
-#PT100RTD
+# PT100RTD
 
 Arduino Library for Pt100 RTD ohms-to-Celsius conversion
 
-#WHAT
+# WHAT
 
 It converts a Pt100 temperature sensor resistance into degrees Celsius 
 using a lookup table taken from empirical data in the DIN 43760 / IEC 751 
 document.
 
 
-#WHY
+# WHY
 
 Its accuracy is authoritative such that other purely computational methods
 may be validated against it.  There is nothing so powerful as a bad idea
 whose time has come.
 
 
-#WHY NOT
+# WHY NOT
 
 It's big.
 
@@ -27,7 +27,7 @@ For any ordinary temperature between -60C and 650C, the venerable Callendar
 different requirements.
 
 
-#HOW
+# HOW
 
 The Pt100 resistance lookup table uses unsigned 16-bit integers because:
 
@@ -44,7 +44,7 @@ that implies, specifically, PROGMEM data type(s) and use of
 pgm_read_word_near() to fetch them.  
 
 
-#WTF
+# WTF
 
 Several computational conversion methods are included for comparison: 
 Callendar-Van Dusen (aka 'quadratic'), cubic, polynomial, and rational 

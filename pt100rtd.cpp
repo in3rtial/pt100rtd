@@ -1,30 +1,7 @@
 #include "pt100rtd.h"
+#include <math.h>
 
-/**********************************************************************
-** Function Name:        search_pt100_list
-**
-** Description:                binary search
-**          if match
-**              return index of a match
-**          if no match
-**              return index of the smallest table value > key
-** 
-**        usually requires the maximum of log2(1051) probes, ==10, 
-**        when search key is not an exact match.
-**
-**        Note: search must not return index == 0.
-**        Calling function must exclude boundary cases
-**        where (ohmsX100 <= table[0]).
-** 
-** Parameters:
-**                uint16_t ohmsX100
-**
-** Uses:
-** Returns:        int index of nearest resistance value
-** Creation: 1/26/2017 4:48a Daniel R. Haney
-**********************************************************************/
-
-int pt100rtd::search_pt100_list(uint16_t ohmsX100)
+int pt100rtd::search_pt100_list(uint16_t ohmsX100) const
 {
     int lower = 0;
     int upper = PT100_TABLE_MAXIDX;
@@ -55,25 +32,7 @@ int pt100rtd::search_pt100_list(uint16_t ohmsX100)
     return(mid);
 }
 
-/**********************************************************************
-** Function Name:        ohmsX100_to_celsius
-**
-** Description:
-**         Look up (unsigned short int)(Pt100 resistance * 100) in table.
-**          Interpolate temperature for intermediate resistances.
-** 
-**          Calling function must exclude boundary cases where
-**          ohmsX100 <= table[0] && ohmsX100 >= table[MAX]
-** 
-** Parameters:
-**        uint16_t Rrtd = 100 * (Pt100 RTD resistance in ohms)
-**
-** Uses:        Pt100_table
-** Returns:        float temperature celsius
-**
-** Creation: 1/26/2017 10:41a Daniel R. Haney
-**********************************************************************/
-float pt100rtd::ohmsX100_to_celsius (uint16_t ohmsX100)
+float pt100rtd::ohmsX100_to_celsius (uint16_t ohmsX100) const
 {
     uint16_t R_upper, R_lower;
     int hundredths = 0;                 // STFU flag for avr-gcc
@@ -118,65 +77,33 @@ float pt100rtd::ohmsX100_to_celsius (uint16_t ohmsX100)
 
     celsius  = static_cast<float>(iTemp) + static_cast<float>(hundredths) / 100.0;
 
-    return(celsius );
+    return celsius;
 }
-
-
-/**********************************************************************
-** Function Name:        celsius (uint16_t)
-** Function Name:        celsius (float)
-**
-** Description:
-**                 return celsius temperature for a given Pt100 RTD resistance
-**
-**                This wrapper function excludes boundary cases where
-**                  ohmsX100 <= table[0] && ohmsX100 >= table[MAX]
-** 
-** Creation: 2/18/2017 2:29p Daniel R. Haney
-**********************************************************************/
 
 // Uses minimally-processed ADC binary output,
 // an unsigned 16 bit integer == (ohms * 100).
-// Use NAN to report an out-of-range error.
-
-float pt100rtd::celsius (uint16_t ohmsX100)
+float pt100rtd::celsius (uint16_t ohmsX100) const
 {
-    if (ohmsX100 < Pt100_table[0])
+    if ((ohmsX100 < Pt100_table[0]) || (ohmsX100 > Pt100_table[PT100_TABLE_MAXIDX]))
     {
         return NAN;
     }
-    else if (ohmsX100 >= Pt100_table[PT100_TABLE_MAXIDX])
-    {
-        return NAN;
-    }
-    else
-    {
-        return pt100rtd::ohmsX100_to_celsius(ohmsX100);
-    }
+    return pt100rtd::ohmsX100_to_celsius(ohmsX100);
 }
 
-
-// Uses a floating point resistance value.
-
-float pt100rtd::celsius (float rtd_ohms)
+float pt100rtd::celsius(float rtd_ohms) const
 {
-    // convert to unsigned short
     uint16_t ohmsX100 = (uint16_t) floor(rtd_ohms * 100.0);
     return pt100rtd::celsius(ohmsX100);
 }
 
-
-// inverse callendar van dusen formula.
-// accurate from -60C up to 850 C.
-float pt100rtd::celsius_cvd(float R_ohms)
+float pt100rtd::celsius_cvd(float R_ohms) const
 {
     constexpr float PT100_NOMINAL { 100.0 };
     constexpr float iCVD_A { 3.9083e-3 };
     constexpr float iCVD_B { -5.775e-7 };
 
     float Z1, Z2, Z3, Z4, temp;
-
-    //Serial.print("Resistance: "); Serial.println(Rt, 8);
 
     Z1 = -iCVD_A;
     Z2 = iCVD_A * iCVD_A - (4 * iCVD_B);
@@ -190,24 +117,15 @@ float pt100rtd::celsius_cvd(float R_ohms)
 }
 
 
-// cubic approximation
-float pt100rtd::celsius_cubic(float R_ohms)
+float pt100rtd::celsius_cubic(float R_ohms) const
 {
-    return -247.29 + R_ohms * ( 2.3992 + R_ohms * (0.00063962 + 1.0241E-6 * R_ohms));
+    return -247.29 + ( R_ohms * ( 2.3992 + R_ohms * (0.00063962 + 1.0241E-6 * R_ohms)) );
 }
 
-
-// R2T polynomial from Analog Devices AN709 app note.
-// implementation ganked from Adafruit MAX31865 library.
-// Use for accurate temperatures -60C and below.
-// Warning! Exceeds Class B tolerance spec above +164C
-
-float pt100rtd::celsius_polynomial (float R_ohms)
+float pt100rtd::celsius_polynomial(float R_ohms) const
 {
-    float rpoly, temp;
-    rpoly = R_ohms;
-
-    temp = -242.02;
+    float rpoly = R_ohms;
+    float temp = -242.02;
     temp += 2.2228 * rpoly;
     rpoly *= R_ohms;                        // square;
     temp += 2.5859e-3 * rpoly;
@@ -221,13 +139,8 @@ float pt100rtd::celsius_polynomial (float R_ohms)
     return temp;
 }
 
-// Rational polynomial fraction approximation taken from
-// Mosaic Industries.com page on "RTD calibration."
-// Accurate, probably beyond the ITS-90 spec
-float pt100rtd::celsius_rationalpolynomial (float R_ohms)
+float pt100rtd::celsius_rationalpolynomial(float R_ohms) const
 {
-    float num, denom, T;
-
     constexpr float c0 { -245.19 };
     constexpr float c1 { 2.5293 };
     constexpr float c2 { -0.066046 };
@@ -237,9 +150,9 @@ float pt100rtd::celsius_rationalpolynomial (float R_ohms)
     constexpr float c6 { 1.6883E-3 };
     constexpr float c7 { -1.3601E-6 };
 
-    num = R_ohms * (c1 + R_ohms * (c2 + R_ohms * (c3 + R_ohms * c4)));
-    denom = 1.0 + R_ohms * (c5 + R_ohms * (c6 + R_ohms * c7));
-    T = c0 + (num / denom);
+    const float num{ R_ohms * (c1 + R_ohms * (c2 + R_ohms * (c3 + R_ohms * c4)))};
+    const float denom{ 1.0 + R_ohms * (c5 + R_ohms * (c6 + R_ohms * c7))};
+    const float T{ c0 + (num / denom)};
 
     return T;
 }
